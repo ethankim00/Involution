@@ -164,7 +164,7 @@ train, val = load_cifar(8)
 
 
 # Initialize a trainer
-trainer = pl.Trainer(max_epochs=3, progress_bar_refresh_rate=20)
+trainer = pl.Trainer(gpus = 1, max_epochs=3, progress_bar_refresh_rate=20)
 
 # Train the model ⚡
 trainer.fit(model, train, val)
