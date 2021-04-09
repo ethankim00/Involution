@@ -14,12 +14,14 @@ import pytorch_lightning as pl
 from pytorch_lightning.metrics.functional import accuracy
 
 
-class CNN(nn.Module):
+
+class CNN(pl.LightningModule):
     """CNN."""
 
     def __init__(self):
         """CNN Builder."""
         super(CNN, self).__init__()
+        self.accuracy = pl.metrics.Accuracy()
 
         self.conv_layer = nn.Sequential(
 
@@ -58,7 +60,7 @@ class CNN(nn.Module):
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.1),
             nn.Linear(512, 10),
-            nn.Softmax(dim=0)
+            nn.Softmax(dim=1)
         )
 
 
@@ -75,6 +77,23 @@ class CNN(nn.Module):
         x = self.fc_layer(x)
 
         return x
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
+        return optimizer
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = F.cross_entropy(y_hat, y)
+        self.log('train_acc_step', self.accuracy(y_hat, y), prog_bar = True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        val_loss = F.cross_entropy(y_hat, y)
+        return val_loss
         
 
 class CifarCNN(pl.LightningModule):
@@ -84,6 +103,7 @@ class CifarInvNet(pl.LightningModule):
 
     def __init__(self):
         super(CifarInvNet, self).__init__()
+        self.accuracy = pl.metrics.Accuracy()
         activation = ReLU()
         self.conv_layer = nn.Sequential(
 
@@ -105,10 +125,10 @@ class CifarInvNet(pl.LightningModule):
             nn.Dropout2d(p=0.05),
 
             # Conv Layer block 3
-            Involution2d(in_dim=128, out_dim=256, kernel_dim = 3, stride = 1, groups=1, reduction=1, dilation  = 1, padding = 1, activation=activation),
-            nn.BatchNorm2d(256),
+            Involution2d(in_dim=128, out_dim=128, kernel_dim = 3, stride = 1, groups=1, reduction=1, dilation  = 1, padding = 1, activation=activation),
+            nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
-            Involution2d(in_dim=256, out_dim=256, kernel_dim = 3, stride = 1, groups=1, reduction=1, dilation  = 1, padding = 1, activation=activation),
+            Involution2d(in_dim=128, out_dim=128, kernel_dim = 3, stride = 1, groups=1, reduction=1, dilation  = 1, padding = 1, activation=activation),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
@@ -116,12 +136,12 @@ class CifarInvNet(pl.LightningModule):
 
         self.fc_layer = nn.Sequential(
             nn.Dropout(p=0.1),
-            nn.Linear(4096, 1024),
+            nn.Linear(2048, 512),
             nn.ReLU(inplace=True),
-            nn.Linear(1024, 512),
+            nn.Linear(512, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.1),
-            nn.Linear(512, 10),
+            nn.Linear(256, 10),
             nn.Softmax(dim=1)
         )
 
@@ -141,15 +161,15 @@ class CifarInvNet(pl.LightningModule):
         return x
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
         return optimizer
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
+        self.log('train_acc_step', self.accuracy(y_hat, y), prog_bar = True)
         return loss
-
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -157,14 +177,15 @@ class CifarInvNet(pl.LightningModule):
         val_loss = F.cross_entropy(y_hat, y)
         return val_loss
 
+def run():
+    model = CifarInvNet()
+    train, val = load_cifar(128)
 
-model = CifarInvNet()
-train, val = load_cifar(8)
+    # Initialize a trainer
+    trainer = pl.Trainer(accelerator='ddp', gpus = 2, max_epochs=15, progress_bar_refresh_rate=20)
 
+    # Train the model 
+    trainer.fit(model, train, val)
 
-
-# Initialize a trainer
-trainer = pl.Trainer(gpus = 1, max_epochs=3, progress_bar_refresh_rate=20)
-
-# Train the model ⚡
-trainer.fit(model, train, val)
+if __name__ == '__main__':
+    run()
