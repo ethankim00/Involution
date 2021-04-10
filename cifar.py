@@ -7,6 +7,7 @@ import torchvision
 import torchvision.transforms as transforms
 
 from datasets import load_cifar
+from resnet import ResNet18
 from involution import Involution2d
 from torch.nn import ReLU
 
@@ -178,14 +179,15 @@ class CifarInvNet(pl.LightningModule):
         return val_loss
 
 def run():
-    model = CifarInvNet()
+    model = ResNet18('inv', 10)
     train, val = load_cifar(128)
 
     # Initialize a trainer
-    trainer = pl.Trainer(accelerator='ddp', gpus = 2, max_epochs=15, progress_bar_refresh_rate=20)
+    trainer = pl.Trainer(gpus = 1, max_epochs=15, progress_bar_refresh_rate=20)
 
     # Train the model 
     trainer.fit(model, train, val)
-
+    trainer.test(test_dataloaders=val)
+    trainer.save_checkpoint("cifarconv.ckpt")
 if __name__ == '__main__':
     run()
